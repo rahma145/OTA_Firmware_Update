@@ -28,10 +28,28 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
+
+typedef struct {
+    uint16_t chunkSize;  // Size of the binary payload
+    uint8_t payload[256]; // Maximum payload size
+} BinaryChunk_t;
+
+
+typedef enum
+{
+	ReceiveSizeChunk,
+	ReceiveChunk
+
+}ReceiveState;
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+
+#define MAX_CHUNK_SIZE 256U
+
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -41,9 +59,14 @@
 
 /* Private variables ---------------------------------------------------------*/
  UART_HandleTypeDef huart4;
-
 osThreadId defaultTaskHandle;
 /* USER CODE BEGIN PV */
+static uint8_t rxIndex[2];
+static uint16_t expectedChunkSize = 0;
+static uint8_t rxBuffer[MAX_CHUNK_SIZE + 2]; // Buffer for incoming data (payload + header)
+static ReceiveState State = ReceiveSizeChunk;
+static uint8_t ACK_SIZE = 0x06U;
+static uint8_t ACK_CHUNK = 0x05U;
 
 /* USER CODE END PV */
 
@@ -93,6 +116,8 @@ int main(void)
   MX_UART4_Init();
   /* USER CODE BEGIN 2 */
 
+  HAL_UARTEx_ReceiveToIdle_IT(&huart4, rxBuffer, sizeof(rxBuffer));
+
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -115,14 +140,6 @@ int main(void)
   /* definition and creation of defaultTask */
   osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
-  if (xQueueCreate(15, sizeof(uint32_t)) == NULL)
-		  {
-	  	  	  ;
-		  }
-  else
-  {
-	  ;
-  }
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -200,7 +217,7 @@ static void MX_UART4_Init(void)
 
   /* USER CODE END UART4_Init 1 */
   huart4.Instance = UART4;
-  huart4.Init.BaudRate = 115200;
+  huart4.Init.BaudRate = 9600;
   huart4.Init.WordLength = UART_WORDLENGTH_8B;
   huart4.Init.StopBits = UART_STOPBITS_1;
   huart4.Init.Parity = UART_PARITY_NONE;
@@ -230,10 +247,10 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2|GPIO_PIN_9, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : PA9 */
-  GPIO_InitStruct.Pin = GPIO_PIN_9;
+  /*Configure GPIO pins : PA2 PA9 */
+  GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_9;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -242,6 +259,61 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
+{
+    if(huart->Instance == UART4)
+    {
+        switch(State)
+        {
+           case ReceiveSizeChunk:
+               HAL_UARTEx_ReceiveToIdle_IT(&huart4, rxIndex, sizeof(rxIndex));
+               HAL_UART_Transmit(&huart4, &ACK_SIZE, sizeof(ACK_SIZE), 2000);
+               State = ReceiveChunk;
+               break;
+           case ReceiveChunk:
+               expectedChunkSize = (rxIndex[0] << 8) | rxIndex[1];
+               HAL_UARTEx_ReceiveToIdle_IT(&huart4, rxBuffer, expectedChunkSize);
+               HAL_UART_Transmit(&huart4, &ACK_CHUNK, sizeof(ACK_CHUNK), 2000);
+               State = ReceiveSizeChunk;
+               break;
+           default:
+               break;
+
+    	}
+    }
+
+
+
+//rxBuffer[rxIndex] = (uint8_t)(huart4.Instance->DR);
+//        rxIndex++;
+//
+//        //Chunk size is received
+//        if(rxIndex == 2U && expectedChunkSize == 0U )
+//        {
+//            //Calculate Expected Chunk Size
+//            expectedChunkSize = (uint8_t)(rxBuffer[0]<<8U | rxBuffer[1]);
+//            if(expectedChunkSize > MAX_CHUNK_SIZE)
+//            {
+//                Error_Handler();
+//            }
+//            else
+//            {
+//                ;
+//            }
+//        }
+//    }
+}
+
+
+
+void CreateChunkQueue(void)
+{
+    if (xQueueCreate(10, sizeof( BinaryChunk_t)) == NULL)
+    {
+        Error_Handler();
+    }
+}
 
 /* USER CODE END 4 */
 
