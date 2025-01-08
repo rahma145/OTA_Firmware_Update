@@ -116,7 +116,9 @@ int main(void)
   MX_UART4_Init();
   /* USER CODE BEGIN 2 */
 
-  HAL_UARTEx_ReceiveToIdle_IT(&huart4, rxBuffer, sizeof(rxBuffer));
+  /*Activation de l'interruption pour la récéption des deux premiers
+   * octets qui représentent la taille du Data */
+  HAL_UART_Receive_IT(&huart4, rxBuffer, 2U);
 
   /* USER CODE END 2 */
 
@@ -264,23 +266,17 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
     if(huart->Instance == UART4)
     {
-        switch(State)
+        if(expectedChunkSize == 0U)
         {
-           case ReceiveSizeChunk:
-               HAL_UARTEx_ReceiveToIdle_IT(&huart4, rxIndex, sizeof(rxIndex));
-               HAL_UART_Transmit(&huart4, &ACK_SIZE, sizeof(ACK_SIZE), 2000);
-               State = ReceiveChunk;
-               break;
-           case ReceiveChunk:
-               expectedChunkSize = (rxIndex[0] << 8) | rxIndex[1];
-               HAL_UARTEx_ReceiveToIdle_IT(&huart4, rxBuffer, expectedChunkSize);
-               HAL_UART_Transmit(&huart4, &ACK_CHUNK, sizeof(ACK_CHUNK), 2000);
-               State = ReceiveSizeChunk;
-               break;
-           default:
-               break;
+            expectedChunkSize = (uint16_t)((rxBuffer[0] << 8) | rxBuffer[1]); // calculate the size of the data
+            HAL_UART_Receive_IT(huart, rxBuffer, expectedChunkSize); //Reactivate reception for the data
+        }
+        else
+        {
+            expectedChunkSize = 0U; // Reinitialize expected chunk size
+            HAL_UART_Receive_IT(&huart4, rxBuffer, 2U); // Reactivate reception for the next chunk of data
+        }
 
-    	}
     }
 
 

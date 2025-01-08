@@ -29,23 +29,12 @@ def write(port, filePath) :
 
         # Logs pour déboguer
          # Envoi du dernier chunk
-        print(f"Envoi du dernier chunk :")
-        print(f"Taille du dernier chunk : {taille_chunk} octets")
-        print(f"Envoi de la taille : {taille_chunk_bytes.hex()}")
-        ser.write(taille_chunk_bytes)
-        ack_size = ser.read(1)
-        if (ack_size == b'\x06'): 
-            print("ACK 0x06 is received, sending the chunk")
-            print(f"Envoi des données : {last_chunk.hex()}")
-            ser.write(last_chunk)
-            if (ack_size == b'\x05'): 
-                print("ACK 0x05 is received")
-                exit
-        else : 
-            print(f"ACK 0x06 is not received for the last chunk") 
-            exit               
-        
-       
+
+         #Send data
+        last_chunk.insert(0, taille_chunk_bytes)
+        print(f"Envoi des données : {last_chunk.hex()}")
+            
+        ser.write(last_chunk)
 
     ser.close()
 
